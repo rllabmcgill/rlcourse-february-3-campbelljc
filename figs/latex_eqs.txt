@@ -1,0 +1,17 @@
+f_{k+1}\left ( i \right ) = \min_{u \in U\left ( i \right ) } \left [ c_i\left ( u \right ) + \gamma \sum_{j\in S}p_{ij}\left ( u \right ) f_k\left ( j \right ) \right ]
+
+
+f_{k+1}\left ( i \right ) = \min_{u \in U\left ( i \right ) } \left [ c_i\left ( u \right ) + \gamma \sum_{j\in S}p_{ij}\left ( u \right ) f\left ( j \right ) \right ]
+
+where\\
+f\left ( j \right ) = \left\{\begin{matrix}
+f_{k+1}\left ( j \right ), & if j <  i \\ 
+f_k\left ( j \right ), & otherwise
+\end{matrix}\right.
+
+
+f_{k+1}\left ( i \right ) = \left\{\begin{matrix}
+  \min_{u \in U\left ( i \right ) } \left [ c_i\left ( u \right ) + \gamma \sum_{j\in S}p_{ij}\left ( u \right ) f_k\left ( j \right ) \right ], & \textup{if } i \in S_k \\ 
+ f_k\left ( i \right ), & \textup{otherwise}
+\end{matrix}\right.
+\textup{where } s_t \in S_k
