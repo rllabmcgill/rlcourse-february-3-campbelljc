@@ -18,6 +18,7 @@ import mdp
 import environment
 import util
 import optparse
+from collections import defaultdict
 
 class Gridworld(mdp.MarkovDecisionProcess):
     """
@@ -27,6 +28,13 @@ class Gridworld(mdp.MarkovDecisionProcess):
         # layout
         if type(grid) == type([]): grid = makeGrid(grid)
         self.grid = grid
+        
+        self.state_probs = defaultdict(lambda: 1)
+        for i, row in enumerate(self.grid):
+            for j, col in enumerate(self.grid[i]):
+                if self.grid[i][j] == 'l':
+                    self.grid[i][j] = ' '
+                    self.state_probs[(i, j)] = 0.05 # 10% chance
 
         # parameters
         self.livingReward = 0.0
@@ -47,7 +55,6 @@ class Gridworld(mdp.MarkovDecisionProcess):
         The probability of moving in an unintended direction.
         """
         self.noise = noise
-
 
     def getPossibleActions(self, state):
         """
@@ -110,7 +117,6 @@ class Gridworld(mdp.MarkovDecisionProcess):
         """
         return state == self.grid.terminalState
 
-
     def getTransitionStatesAndProbs(self, state, action):
         """
         Returns list of (nextState, prob) pairs
@@ -139,22 +145,30 @@ class Gridworld(mdp.MarkovDecisionProcess):
         eastState = (self.__isAllowed(y,x+1) and (x+1,y)) or state
 
         if action == 'north' or action == 'south':
+            prob = 1
             if action == 'north':
-                successors.append((northState,1-self.noise))
+                successors.append((northState,max(0, self.state_probs[northState]-self.noise)))
+                prob -= max(0, self.state_probs[northState]-self.noise)
             else:
-                successors.append((southState,1-self.noise))
-
-            massLeft = self.noise
+                successors.append((southState,max(0, self.state_probs[southState]-self.noise)))
+                prob -= max(0, self.state_probs[southState]-self.noise)
+            
+            massLeft = prob
+            assert massLeft >= 0 and massLeft <= 1
             successors.append((westState,massLeft/2.0))
             successors.append((eastState,massLeft/2.0))
 
         if action == 'west' or action == 'east':
+            prob = 1
             if action == 'west':
-                successors.append((westState,1-self.noise))
+                successors.append((westState,max(0, self.state_probs[westState]-self.noise)))
+                prob -= max(0, self.state_probs[westState]-self.noise)
             else:
-                successors.append((eastState,1-self.noise))
+                successors.append((eastState,max(0, self.state_probs[eastState]-self.noise)))
+                prob -= max(0, self.state_probs[eastState]-self.noise)
 
-            massLeft = self.noise
+            massLeft = prob
+            assert massLeft >= 0 and massLeft <= 1
             successors.append((northState,massLeft/2.0))
             successors.append((southState,massLeft/2.0))
 
@@ -180,7 +194,10 @@ class GridworldEnvironment(environment.Environment):
 
     def __init__(self, gridWorld):
         self.gridWorld = gridWorld
-        self.reset()
+        self.reset(agent=None)
+    
+    def setAgent(self, agent):
+        self.reset(agent)
 
     def getCurrentState(self):
         return self.state
@@ -211,8 +228,11 @@ class GridworldEnvironment(environment.Environment):
                 return (nextState, reward)
         raise 'Total transition probability less than one; sample failure.'
 
-    def reset(self):
-        self.state = self.gridWorld.getStartState()
+    def reset(self, agent):
+        if 'getStartState' in dir(agent):
+            self.state = agent.getStartState()
+        else:
+            self.state = self.gridWorld.getStartState()
 
 class Grid:
     """
@@ -300,18 +320,135 @@ def getBridgeGrid():
 def getBookGrid():
     grid = [[' ',' ',' ',+1],
             [' ','#',' ',-1],
-            ['S',' ',' ',' ']]
+            [' ',' ',' ',' '],
+            ['S',' ','#',' ']]
     return Gridworld(grid)
 
 def getMazeGrid():
-    grid = [[' ',' ',' ',+1],
+    grid = [#[' ',' ',' ',+5],
+            #[' ','#','#',' '],
+            [' ',' ',' ',+1],
             ['#','#',' ','#'],
             [' ','#',' ',' '],
             [' ','#','#',' '],
             ['S',' ',' ',' ']]
     return Gridworld(grid)
 
+def getRandomGrid():
+    # src: http://rosettacode.org/wiki/Maze_generation#Python
+    w, h = 6, 6
+    vis = [[0] * w + [1] for _ in range(h)] + [[1] * (w + 1)]
+    ver = [["| "] * w + ['|'] for _ in range(h)] + [[]]
+    hor = [["+-"] * w + ['+'] for _ in range(h + 1)]
 
+    def walk(x, y):
+        vis[y][x] = 1
+
+        d = [(x - 1, y), (x, y + 1), (x + 1, y), (x, y - 1)]
+        random.shuffle(d)
+        for (xx, yy) in d:
+            if vis[yy][xx]: continue
+            if xx == x: hor[max(y, yy)][x] = "+ "
+            if yy == y: ver[y][max(x, xx)] = "  "
+            walk(xx, yy)
+
+    walk(random.randrange(w), random.randrange(h))
+    
+    s = ""
+    ps = ""
+    for (a, b) in zip(hor, ver):
+        s += ''.join(a + b)
+        ps += ''.join(a + ['\n'] + b + ['\n'])
+    s = s.replace("+", "#")
+    s = s.replace("-", "#")
+    s = s.replace("|", "#")
+    ps = ps.replace("+", "#")
+    ps = ps.replace("-", "#")
+    ps = ps.replace("|", "#")
+    print(ps)
+    print(s)
+    
+    w = w*2 + 1
+    h = h*2 + 1
+    
+    #s = "######## # # ## # # ##   # ## ### ##     ########"
+    #s = "##########       ## # ###### #     ## ##### ## #   # ## ### # ##     # ##########"
+    #s = "############     #   ## ### ### ##   #   # #### ### # ##   #   # ## ####### ##   #   # #### # # # ##     #   ############"
+    #s = "##############           ## ######### ##   #     # #### # ##### ##     #     ## ##### ### ##   #   #   ## ### ######## #   #     ## # ### ### ## #     #   ##############"
+    
+    s = "##############     #     ## ### # # # ## # #   # # ## # ##### ####     # #   ###### # ### ## #   # #   ## # ### # ####   #   # # ## ### # # # ##     # #   ##############"
+    # nothing random below
+    
+    grid = [[' ' for i in range(w)] for j in range(h)]
+    for i in range(h):
+        row = s[w*i : w*(i+1)]
+        grid[i] = [c for c in row]
+    
+    # now determine dead-ends
+    '''
+    deadends = []
+    walls = []
+    for x in range(len(grid)):
+        if x in [0, len(grid)-1]:
+            continue
+        for y in range(len(grid[0])):
+            if y in [0, len(grid[0])-1]:
+                continue
+            num_walls = 0
+            if grid[x][y] == '#':
+                walls.append((x, y))
+            if grid[x-1][y] == '#': num_walls += 1
+            if grid[x+1][y] == '#': num_walls += 1
+            if grid[x][y-1] == '#': num_walls += 1
+            if grid[x][y+1] == '#': num_walls += 1
+            if num_walls == 3 and grid[x][y] == ' ':
+                deadends.append((x, y))
+    
+    if len(deadends) < 3:
+        return getRandomGrid()
+    '''
+    
+    for i in range(0, len(walls)):
+        # no walls
+        x, y = walls[i]
+        grid[x][y] = ' '
+    
+    '''
+    # all other give negative reward
+    for i, (x, y) in enumerate(deadends[1:]):
+        if i == len(deadends)//2: continue
+        grid[x][y] = 3
+
+    grid[deadends[len(deadends)//2][0]][deadends[len(deadends)//2][1]] = 10
+    '''
+    
+    # here we set the left/right sides to a low probability
+    possible_exit_spots = []
+    for x in range(len(grid)):
+        for y in range(len(grid[0])):
+            if x > 3 and x < len(grid)-3 and y > 3 and y < len(grid[y])-3:
+                possible_exit_spots.append((x, y))
+                continue
+            if grid[x][y] == ' ':
+                grid[x][y] = 'l'
+    
+    # set the end states
+    sx, sy = possible_exit_spots[0+(2*len(grid))+1]
+    grid[sx][sy] = 'S'
+    gx, gy = possible_exit_spots[-1-(2*len(grid[0]))-1]
+    grid[gx][gy] = 10
+    
+    for row in grid:
+        new_s = ''
+        for col in row:
+            if isinstance(col, int):
+                col = 'r' if col > 0 else 'p'
+            new_s += col
+        print(new_s)
+    
+    #input("")
+    
+    return Gridworld(grid)
 
 def getUserAction(state, actionFunction):
     """
@@ -335,21 +472,28 @@ def getUserAction(state, actionFunction):
         action = actions[0]
     return action
 
-def printString(x): print x
+def printString(x): print(x)
 
 def runEpisode(agent, environment, discount, decision, display, message, pause, episode):
     returns = 0
     totalDiscount = 1.0
-    environment.reset()
+    environment.reset(agent)
     if 'startEpisode' in dir(agent): agent.startEpisode()
     message("BEGINNING EPISODE: "+str(episode)+"\n")
+    
+    timestep = 0
+    MAX_TIMESTEPS = 20
     while True:
+        if timestep >= MAX_TIMESTEPS:
+            return returns
 
         # DISPLAY CURRENT STATE
         state = environment.getCurrentState()
         display(state)
-        pause()
-
+        #pause()
+        if timestep == 0 and episode == 1:
+            input("")
+        
         # END IF IN A TERMINAL STATE
         actions = environment.getPossibleActions(state)
         if len(actions) == 0:
@@ -363,16 +507,18 @@ def runEpisode(agent, environment, discount, decision, display, message, pause, 
 
         # EXECUTE ACTION
         nextState, reward = environment.doAction(action)
-        message("Started in state: "+str(state)+
-                "\nTook action: "+str(action)+
-                "\nEnded in state: "+str(nextState)+
-                "\nGot reward: "+str(reward)+"\n")
+        #message("Started in state: "+str(state)+
+        #        "\nTook action: "+str(action)+
+        #        "\nEnded in state: "+str(nextState)+
+        #        "\nGot reward: "+str(reward)+"\n")
         # UPDATE LEARNER
         if 'observeTransition' in dir(agent):
             agent.observeTransition(state, action, nextState, reward)
 
         returns += reward * totalDiscount
         totalDiscount *= discount
+        
+        timestep += 1
 
     if 'stopEpisode' in dir(agent):
         agent.stopEpisode()
@@ -430,7 +576,7 @@ def parseOptions():
     opts, args = optParser.parse_args()
 
     if opts.manual and opts.agent != 'q':
-        print '## Disabling Agents in Manual Mode (-m) ##'
+        print('## Disabling Agents in Manual Mode (-m) ##')
         opts.agent = None
 
     # MANAGE CONFLICTS
@@ -479,10 +625,14 @@ if __name__ == '__main__':
     # GET THE AGENT
     ###########################
 
-    import valueIterationAgents, qlearningAgents
+    import valueIterationAgents, rtdp #, qlearningAgents
     a = None
     if opts.agent == 'value':
-        a = valueIterationAgents.ValueIterationAgent(mdp, opts.discount, opts.iters)
+        a = valueIterationAgents.ValueIterationAgent(mdp, env, opts.discount, opts.iters, display)
+    elif opts.agent == 'valuegs':
+        a = valueIterationAgents.GSValueIterationAgent(mdp, env, opts.discount, opts.iters, display)
+    elif opts.agent == 'rtdp':
+        a = rtdp.RTDPLearningAgent(mdp, env, opts.discount, opts.iters) #mdp, env, opts.discount, opts.iters)
     elif opts.agent == 'q':
         #env.getPossibleActions, opts.discount, opts.learningRate, opts.epsilon
         #simulationFn = lambda agent, state: simulation.GridworldSimulation(agent,state,mdp)
@@ -519,7 +669,7 @@ if __name__ == '__main__':
     ###########################
     # DISPLAY Q/V VALUES BEFORE SIMULATION OF EPISODES
     try:
-        if not opts.manual and opts.agent == 'value':
+        if not opts.manual and (opts.agent == 'value' or opts.agent == 'valuegs' or opts.agent == 'rtdp'):
             if opts.valueSteps:
                 for i in range(opts.iters):
                     tempAgent = valueIterationAgents.ValueIterationAgent(mdp, opts.discount, i)
@@ -543,7 +693,8 @@ if __name__ == '__main__':
         else:
             if opts.agent == 'random': displayCallback = lambda state: display.displayValues(a, state, "CURRENT VALUES")
             if opts.agent == 'value': displayCallback = lambda state: display.displayValues(a, state, "CURRENT VALUES")
-            if opts.agent == 'q': displayCallback = lambda state: display.displayQValues(a, state, "CURRENT Q-VALUES")
+            if opts.agent == 'valuegs': displayCallback = lambda state: display.displayValues(a, state, "CURRENT VALUES")
+            if opts.agent == 'rtdp': displayCallback = lambda state: display.displayValues(a, state, "CURRENT VALUES")
 
     messageCallback = lambda x: printString(x)
     if opts.quiet:
@@ -563,14 +714,14 @@ if __name__ == '__main__':
     # RUN EPISODES
     if opts.episodes > 0:
         print
-        print "RUNNING", opts.episodes, "EPISODES"
+        print("RUNNING", opts.episodes, "EPISODES")
         print
     returns = 0
     for episode in range(1, opts.episodes+1):
         returns += runEpisode(a, env, opts.discount, decisionCallback, displayCallback, messageCallback, pauseCallback, episode)
     if opts.episodes > 0:
         print
-        print "AVERAGE RETURNS FROM START STATE: "+str((returns+0.0) / opts.episodes)
+        print("AVERAGE RETURNS FROM START STATE: "+str((returns+0.0) / opts.episodes))
         print
         print
 

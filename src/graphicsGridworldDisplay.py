@@ -14,6 +14,7 @@
 
 import util
 from graphicsUtils import *
+from functools import reduce
 
 class GraphicsGridworldDisplay:
 
@@ -28,14 +29,14 @@ class GraphicsGridworldDisplay:
     def pause(self):
         wait_for_keys()
 
-    def displayValues(self, agent, currentState = None, message = 'Agent Values'):
+    def displayValues(self, agent, currentState = None, message = 'Agent Values', showActions=True):
         values = util.Counter()
         policy = {}
         states = self.gridworld.getStates()
         for state in states:
             values[state] = agent.getValue(state)
             policy[state] = agent.getPolicy(state)
-        drawValues(self.gridworld, values, policy, currentState, message)
+        drawValues(self.gridworld, values, policy if showActions else None, currentState, message)
         sleep(0.05 / self.speed)
 
     def displayNullValues(self, currentState = None, message = ''):
@@ -121,6 +122,8 @@ def drawValues(gridworld, values, policy, currentState = None, message = 'State 
                 if policy != None and state in policy:
                     action = policy[state]
                     actions = gridworld.getPossibleActions(state)
+                else:
+                    actions = []
                 if action not in actions and 'exit' in actions:
                     action = 'exit'
                 valString = '%.2f' % value
@@ -252,7 +255,7 @@ def drawSquare(x, y, val, min, max, valStr, action, isObstacle, isTerminal, isCu
         circle( (screen_x, screen_y), 0.1*GRID_SIZE, outlineColor=LOCATION_COLOR, fillColor=LOCATION_COLOR )
 
     if not isObstacle:
-        text( (screen_x, screen_y), text_color, valStr, "Courier", -30, "bold", "c")
+        text( (screen_x, screen_y), text_color, valStr, "Courier", -16, "bold", "c")
 
 
 def drawSquareQ(x, y, qVals, minVal, maxVal, valStrs, bestActions, isCurrent):
@@ -344,5 +347,5 @@ def to_grid(point):
     (x, y) = point
     x = int ((y - MARGIN + GRID_SIZE * 0.5) / GRID_SIZE)
     y = int ((x - MARGIN + GRID_SIZE * 0.5) / GRID_SIZE)
-    print point, "-->", (x, y)
+    print(point, "-->", (x, y))
     return (x, y)
